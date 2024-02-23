@@ -114,7 +114,7 @@ impl RunCommon {
         Ok(())
     }
 
-    pub fn load_module(&self, engine: &Engine, path: &Path) -> Result<RunTarget> {
+    pub fn load_run_target(&self, engine: &Engine, path: &Path) -> Result<RunTarget> {
         let path = match path.to_str() {
             #[cfg(unix)]
             Some("-") => "/dev/stdin".as_ref(),
@@ -140,7 +140,7 @@ impl RunCommon {
         // happen at this time). It's hoped though that opening a file twice
         // isn't too bad in the grand scheme of things with respect to the CLI.
         match wasmtime_runtime::MmapVec::from_file(path) {
-            Ok(map) => self.load_module_contents(
+            Ok(map) => self.load_run_target_contents(
                 engine,
                 path,
                 &map,
@@ -151,7 +151,7 @@ impl RunCommon {
             Err(_) => {
                 let bytes = std::fs::read(path)
                     .with_context(|| format!("failed to read file: {}", path.display()))?;
-                self.load_module_contents(
+                self.load_run_target_contents(
                     engine,
                     path,
                     &bytes,
@@ -163,7 +163,7 @@ impl RunCommon {
         }
     }
 
-    pub fn load_module_contents(
+    pub fn load_run_target_contents(
         &self,
         engine: &Engine,
         path: &Path,

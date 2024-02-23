@@ -131,7 +131,7 @@ impl RunCommand {
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let main = self
             .run
-            .load_module(&engine, self.module_and_args[0].as_ref())?;
+            .load_run_target(&engine, self.module_and_args[0].as_ref())?;
 
         // Validate coredump-on-trap argument
         if let Some(path) = &self.run.common.debug.coredump {
@@ -179,7 +179,7 @@ impl RunCommand {
         }
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
-            let module = match self.run.load_module(&engine, path)? {
+            let module = match self.run.load_run_target(&engine, path)? {
                 RunTarget::Core(m) => m,
                 #[cfg(feature = "component-model")]
                 RunTarget::Component(_) => bail!("components cannot be loaded with `--preload`"),
