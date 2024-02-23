@@ -3333,6 +3333,7 @@ dependencies = [
  "bstr",
  "bytes",
  "bytesize",
+ "cap-std",
  "cfg-if",
  "clap",
  "component-macro-test",

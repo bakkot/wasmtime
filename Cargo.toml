@@ -59,6 +59,7 @@ tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
+cap-std = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param", "process"] }
@@ -356,7 +357,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["wasi-legacy-implementation", "dep:wasmtime-wasi-threads"]
-wasi-legacy-implementation = ["dep:wasi-common"]
+wasi-legacy-implementation = ["dep:wasi-common", "dep:listenfd"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
@@ -385,7 +386,7 @@ explore = ["dep:wasmtime-explorer"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
-run = ["dep:wasmtime-wasi", "wasmtime/runtime", "wasmtime-runtime", "dep:listenfd"]
+run = ["dep:wasmtime-wasi", "dep:cap-std", "wasmtime/runtime", "wasmtime-runtime"]
 
 [[test]]
 name = "host_segfault"
