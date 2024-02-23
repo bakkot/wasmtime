@@ -308,6 +308,7 @@ default = [
   "config",
 
   # On-by-default WASI features
+  "wasi-legacy-implementation",
   "wasi-nn",
   "wasi-threads",
   "wasi-http",
@@ -354,7 +355,8 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # These features are all included in the `default` set above and this is
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
-wasi-threads = ["dep:wasmtime-wasi-threads"]
+wasi-threads = ["wasi-legacy-implementation", "dep:wasmtime-wasi-threads"]
+wasi-legacy-implementation = ["dep:wasi-common"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
@@ -383,7 +385,7 @@ explore = ["dep:wasmtime-explorer"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
-run = ["dep:wasmtime-wasi", "wasmtime/runtime", "wasmtime-runtime", "dep:listenfd", "dep:wasi-common"]
+run = ["dep:wasmtime-wasi", "wasmtime/runtime", "wasmtime-runtime", "dep:listenfd"]
 
 [[test]]
 name = "host_segfault"

@@ -299,6 +299,8 @@ jobs:
     - run: cargo check -p wasmtime-cli --no-default-features
     - run: cargo check -p wasmtime-cli --no-default-features --features run
     - run: cargo check -p wasmtime-cli --no-default-features --features run,component-model
+    - run: cargo check -p wasmtime-cli --no-default-features --features run,component-model,serve
+    - run: cargo check -p wasmtime-cli --no-default-features --features run,wasi-legacy-implementation
     - run: cargo check -p wasmtime-cli --no-default-features --features compile
     - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift
     - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
