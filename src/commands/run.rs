@@ -12,7 +12,6 @@ use cap_std::{ambient_authority, fs::Dir};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 
@@ -312,8 +311,7 @@ impl RunCommand {
         use wasmtime::{AsContextMut, GuestProfiler, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
-        store.data_mut().guest_profiler =
-            Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+        store.data_mut().guest_profiler = Some(GuestProfiler::new(module_name, interval, modules));
 
         fn sample(mut store: impl AsContextMut<Data = Host>) {
             let mut profiler = store
@@ -322,9 +320,7 @@ impl RunCommand {
                 .guest_profiler
                 .take()
                 .unwrap();
-            Arc::get_mut(&mut profiler)
-                .expect("profiling doesn't support threads yet")
-                .sample(&store, std::time::Duration::ZERO);
+            profiler.sample(&store, std::time::Duration::ZERO);
             store.as_context_mut().data_mut().guest_profiler = Some(profiler);
         }
 
@@ -355,8 +351,11 @@ impl RunCommand {
 
         let path = path.to_string();
         return Box::new(move |store| {
-            let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
-                .expect("profiling doesn't support threads yet");
+            let profiler = store
+                .data_mut()
+                .guest_profiler
+                .take()
+                .expect("profiler present");
             if let Err(e) = std::fs::File::create(&path)
                 .map_err(anyhow::Error::new)
                 .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
@@ -630,22 +629,13 @@ impl RunCommand {
                 match linker {
                     CliLinker::Core(linker) => {
                         wasmtime_wasi_nn::witx::add_to_linker(linker, |host| {
-                            // This WASI proposal is currently not protected against
-                            // concurrent access--i.e., when wasi-threads is actively
-                            // spawning new threads, we cannot (yet) safely allow access and
-                            // fail if more than one thread has `Arc`-references to the
-                            // context. Once this proposal is updated (as wasi-common has
-                            // been) to allow concurrent access, this `Arc::get_mut`
-                            // limitation can be removed.
-                            Arc::get_mut(host.wasi_nn.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support")
+                            host.wasi_nn.as_mut().expect("WasiNnCtx present")
                         })?;
                     }
                     #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| {
-                            Arc::get_mut(host.wasi_nn.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support")
+                            host.wasi_nn.as_mut().expect("WasiNnCtx present")
                         })?;
                     }
                 }
@@ -658,7 +648,7 @@ impl RunCommand {
                     .map(|g| (g.format.clone(), g.dir.clone()))
                     .collect::<Vec<_>>();
                 let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
-                store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new(backends, registry)));
+                store.data_mut().wasi_nn = Some(WasiNnCtx::new(backends, registry));
             }
         }
 
@@ -709,7 +699,7 @@ impl RunCommand {
                     }
                 }
 
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx {}));
+                store.data_mut().wasi_http = Some(WasiHttpCtx {});
             }
         }
 
@@ -773,50 +763,43 @@ impl RunCommand {
         }
 
         let ctx = builder.build();
-        store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
+        store.data_mut().preview2_ctx = Some(ctx);
         Ok(())
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 struct Host {
     // The Mutex is only needed to satisfy the Sync constraint but we never
     // actually perform any locking on it as we use Mutex::get_mut for every
     // access.
-    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::WasiCtx>>>,
+    preview2_ctx: Option<wasmtime_wasi::WasiCtx>,
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
     // "just" an empty table.
-    preview2_table: Arc<Mutex<wasmtime::component::ResourceTable>>,
+    preview2_table: wasmtime::component::ResourceTable,
 
     // State necessary for the preview1 implementation of WASI backed by the
     // preview2 host implementation. Only used with the `--preview2` flag right
     // now when running core modules.
-    preview2_adapter: Arc<wasmtime_wasi::preview1::WasiPreview1Adapter>,
+    preview2_adapter: wasmtime_wasi::preview1::WasiPreview1Adapter,
 
     #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<Arc<WasiNnCtx>>,
+    wasi_nn: Option<WasiNnCtx>,
     #[cfg(feature = "wasi-http")]
-    wasi_http: Option<Arc<WasiHttpCtx>>,
+    wasi_http: Option<WasiHttpCtx>,
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
-    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
+    guest_profiler: Option<wasmtime::GuestProfiler>,
 }
 
 impl wasmtime_wasi::WasiView for Host {
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        &mut self.preview2_table
     }
 
     fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        let ctx = self.preview2_ctx.as_mut().unwrap();
-        Arc::get_mut(ctx)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        self.preview2_ctx.as_mut().expect("WasiCtx present")
     }
 }
 
@@ -826,23 +809,18 @@ impl wasmtime_wasi::preview1::WasiPreview1View for Host {
     }
 
     fn adapter_mut(&mut self) -> &mut wasmtime_wasi::preview1::WasiPreview1Adapter {
-        Arc::get_mut(&mut self.preview2_adapter)
-            .expect("wasmtime_wasi is not compatible with threads")
+        &mut self.preview2_adapter
     }
 }
 
 #[cfg(feature = "wasi-http")]
 impl wasmtime_wasi_http::types::WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
-        let ctx = self.wasi_http.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
+        self.wasi_http.as_mut().expect("WasiHttpCtx present")
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("preview2 is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        &mut self.preview2_table
     }
 }
 
