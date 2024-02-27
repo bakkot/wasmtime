@@ -1,4 +1,4 @@
-use super::{CliLinker, RunCommand, RunTarget};
+use super::{RunCommand, RunTarget};
 use anyhow::{anyhow, Context, Result};
 use std::sync::Arc;
 use wasi_common::sync::{TcpListener, WasiCtxBuilder};
@@ -62,12 +62,20 @@ impl RunCommand {
 
     fn populate_with_wasi_legacy(
         &self,
-        linker: &mut CliLinker,
+        linker: &mut wasmtime::Linker<Host>,
         store: &mut Store<Host>,
         module: &RunTarget,
     ) -> Result<()> {
         todo!();
         Ok(())
+    }
+
+    pub(super) fn execute_legacy(
+        mut self,
+        engine: wasmtime::Engine,
+        main: wasmtime::Module,
+    ) -> Result<()> {
+        todo!()
     }
 }
 
