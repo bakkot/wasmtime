@@ -98,12 +98,6 @@ pub struct RunCommand {
     pub module_and_args: Vec<OsString>,
 }
 
-enum CliLinker {
-    Core(wasmtime::Linker<Host>),
-    #[cfg(feature = "component-model")]
-    Component(wasmtime::component::Linker<Host>),
-}
-
 impl RunCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
@@ -139,6 +133,30 @@ impl RunCommand {
             }
         }
 
+        match main {
+            RunTarget::Core(main) => {
+                // If preview2 is explicitly disabled, or if threads
+                // are enabled, then use the historical preview1
+                // implementation.
+                match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
+                    (Some(false), _) | (None, Some(true)) => self.execute_legacy(engine, main),
+                    // If preview2 was explicitly requested, always use it.
+                    // Otherwise use it so long as threads are disabled.
+                    //
+                    // Note that for now `preview0` is currently
+                    // default-enabled but this may turn into
+                    // default-disabled in the future.
+                    (Some(true), _) | (None, Some(false) | None) => {
+                        self.execute_module(engine, main)
+                    }
+                }
+            }
+            #[cfg(feature = "component-model")]
+            RunTarget::Component(main) => self.execute_component(engine, main),
+        }
+    }
+
+    fn execute_component(mut self, engine: Engine, component: Component) -> Result<()> {
         let mut linker = match &main {
             RunTarget::Core(_) => CliLinker::Core(wasmtime::Linker::new(&engine)),
             #[cfg(feature = "component-model")]
